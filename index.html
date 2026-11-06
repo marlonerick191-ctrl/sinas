@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sala de Aula – Quiz do 2º Ano</title>
+<style>
+:root{--bg:#f1eee6;--fg:#222;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b1f;--fg:#ddd}}
+:root[data-theme="dark"]{--bg:#1b1b1f;--fg:#ddd}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;padding:8px}
+canvas{width:100%;max-width:960px;height:auto;border-radius:8px;outline:none}
+p{margin:8px;font-size:14px;text-align:center}
+#ctl{display:none;width:100%;max-width:960px;justify-content:space-between;align-items:center;padding:6px 4px;touch-action:none;user-select:none;-webkit-user-select:none}
+@media (pointer:coarse){#ctl{display:flex}}
+.dp{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px);gap:4px}
+.dp button,#ok{border:0;border-radius:12px;background:#3c6e9e;color:#fff;font:bold 22px Arial,sans-serif;touch-action:none}
+.dp button:active,#ok:active{background:#fadc46;color:#222}
+#ok{width:130px;height:90px;font-size:20px;background:#289646}
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="640" tabindex="0"></canvas>
+<div id="ctl">
+<div class="dp">
+<button data-k="arrowup" style="grid-area:1/2">▲</button>
+<button data-k="arrowleft" style="grid-area:2/1">◀</button>
+<button data-k="arrowright" style="grid-area:2/3">▶</button>
+<button data-k="arrowdown" style="grid-area:3/2">▼</button>
+</div>
+<button id="ok">Responder</button>
+</div>
+<p>Setas/WASD: mover · ESPAÇO ou E: responder · ENTER: começar (ou clique na tela)<br>No celular: use os botões ou toque direto na alternativa.</p>
+<script>
+const C=document.getElementById("c"),g=C.getContext("2d");
+const W=960,H=640,FN="Arial, Helvetica, sans-serif";
+const F=(s,b)=>(b?"bold ":"")+s+"px "+FN;
+const PEQ=F(17),MED=F(22,1),GRD=F(30,1),TIT=F(48,1);
+const BRANCO="#f5f5f5",AMARELO="#fadc46",PRETO="#141414",PELE="#f0c8a0",VERM="#d23c3c";
+const NOMES={1:"Fácil",2:"Médio",3:"Difícil"},VIDAS=5,SOBE=3;
+const QUADRO={x:40,y:56,w:880,h:320},AREA={x:60,y:84,w:840,h:100};
+const OPC=[0,1,2,3].map(i=>({x:65+i*210,y:200,w:200,h:160}));
+const MESAS=[120,415,710].map(x=>({x,y:505,w:130,h:44}));
+const PROF={x:50,y:395,w:40,h:60},OBST=[...MESAS,PROF];
+const TOPO=386,BASE=H-56,LIMQ=450;
+const ELOGIOS=["Excelente!","Muito bem!","Isso mesmo!","Você está arrasando!","Resposta certa!"];
+const BRONCAS=["Não foi dessa vez.","Quase! Estude mais um pouquinho.","Resposta errada!"];
+
+// Banco: matéria -> [fácil, médio, difícil]; cada item = [pergunta, certa, errada1, errada2, errada3]
+const BANCO={
+"Matemática":[
+[["Qual é o próximo termo da PA: 2, 5, 8, 11, ...?","14","13","15","16"],["Quanto vale sen 30°?","1/2","√3/2","√2/2","1"],["Qual é o valor de 5! (5 fatorial)?","120","60","24","25"]],
+[["Qual é a razão da PG: 3, 6, 12, 24, ...?","2","3","4","6"],["Quanto vale log de 1000 na base 10?","3","2","10","100"],["De quantas maneiras 3 pessoas podem ficar em uma fila?","6","3","9","12"]],
+[["Qual é o determinante da matriz de linhas (2, 3) e (1, 4)?","5","11","6","-5"],["Ao lançar dois dados, qual a probabilidade de a soma ser 7?","1/6","1/12","1/9","7/36"],["Qual é a soma dos 10 primeiros termos da PA: 1, 3, 5, 7, ...?","100","90","110","19"]]],
+"Física":[
+[["Qual é a temperatura de ebulição da água ao nível do mar, em °C?","100","0","50","212"],["Qual fenômeno explica a formação do eco?","Reflexão do som","Refração","Difração","Polarização"],["A mudança do estado sólido para o líquido chama-se...","fusão","solidificação","vaporização","sublimação"]],
+[["A quantos Kelvin corresponde 0 °C?","273 K","0 K","100 K","373 K"],["A imagem formada por um espelho plano é...","virtual e do mesmo tamanho do objeto","real e invertida","virtual e menor","real e maior"],["A velocidade da luz no vácuo é aproximadamente...","3 x 10^8 m/s","3 x 10^6 m/s","340 m/s","3 x 10^5 m/s"]],
+[["Quando a luz passa do ar para a água, a sua velocidade...","diminui","aumenta","não muda","torna-se zero"],["Qual é a frequência de uma onda de período 0,02 s?","50 Hz","5 Hz","0,02 Hz","200 Hz"],["Pelo princípio de Arquimedes, o empuxo é igual...","ao peso do fluido deslocado","ao peso do corpo","à massa do fluido","à densidade do corpo"]]],
+"Química":[
+[["Qual é o símbolo químico do sódio?","Na","S","So","N"],["Qual é o pH de uma solução neutra a 25 °C?","7","0","1","14"],["Qual é a fórmula da água?","H2O","CO2","H2O2","HO"]],
+[["Qual função orgânica possui o grupo -OH ligado a carbono saturado?","Álcool","Fenol","Éter","Aldeído"],["Uma reação que libera calor para o ambiente é chamada de...","exotérmica","endotérmica","isotérmica","adiabática"],["Um catalisador atua...","diminuindo a energia de ativação","aumentando a energia de ativação","alterando o ΔH da reação","consumindo-se totalmente"]],
+[["Qual é a concentração, em mol/L, de 0,5 mol de soluto em 2 L de solução?","0,25 mol/L","1 mol/L","0,5 mol/L","4 mol/L"],["Qual é a massa molar do CO2 (C = 12, O = 16)?","44 g/mol","28 g/mol","32 g/mol","56 g/mol"],["Em uma pilha, o eletrodo onde ocorre a oxidação é o...","ânodo","cátodo","eletrólito","ponte salina"]]],
+"Biologia":[
+[["Qual organela é responsável pela respiração celular?","Mitocôndria","Ribossomo","Lisossomo","Complexo golgiense"],["Qual é o maior órgão do corpo humano?","Pele","Fígado","Pulmão","Intestino"],["Qual gás as plantas absorvem na fotossíntese?","Gás carbônico (CO2)","Oxigênio","Nitrogênio","Hidrogênio"]],
+[["Os decompositores têm a função de...","reciclar a matéria orgânica","realizar fotossíntese","caçar herbívoros","produzir alimento a partir da luz"],["Qual é a unidade funcional do rim?","Néfron","Neurônio","Alvéolo","Hepatócito"],["Qual reino inclui os cogumelos e as leveduras?","Fungi","Plantae","Monera","Protista"]],
+[["Qual hormônio é produzido pelo pâncreas e reduz a glicemia?","Insulina","Glucagon","Adrenalina","Tiroxina"],["Qual é a sequência correta da classificação taxonômica?","Reino, Filo, Classe, Ordem, Família, Gênero, Espécie","Reino, Classe, Filo, Ordem, Gênero, Família, Espécie","Filo, Reino, Ordem, Classe, Família, Espécie, Gênero","Espécie, Gênero, Família, Classe, Ordem, Filo, Reino"],["Qual vaso leva sangue do coração para os pulmões?","Artéria pulmonar","Veia pulmonar","Aorta","Veia cava"]]],
+"História":[
+[["Em que ano ocorreu a Independência do Brasil?","1822","1808","1889","1500"],["Quem proclamou a Independência do Brasil?","Dom Pedro I","Dom Pedro II","Dom João VI","Tiradentes"],["A Revolução Industrial começou em qual país?","Inglaterra","França","Alemanha","Estados Unidos"]],
+[["Qual lema ficou associado à Revolução Francesa?","Liberdade, Igualdade e Fraternidade","Deus, Pátria e Família","Ordem e Progresso","Paz, Pão e Terra"],["Em que ano foi proclamada a República no Brasil?","1889","1822","1888","1930"],["Qual lei de 1888 aboliu a escravidão no Brasil?","Lei Áurea","Lei do Ventre Livre","Lei Eusébio de Queirós","Lei dos Sexagenários"]],
+[["O Iluminismo defendia principalmente...","a razão e a crítica ao absolutismo","o direito divino dos reis","o mercantilismo estatal","a volta ao feudalismo"],["Qual filósofo escreveu “O Espírito das Leis” e propôs a separação dos poderes?","Montesquieu","Rousseau","Voltaire","Locke"],["Qual documento de 1776 proclamou a independência das 13 colônias americanas?","Declaração de Independência","Constituição de 1787","Carta Magna","Bill of Rights"]]],
+"Geografia":[
+[["Qual é o maior bioma do Brasil em extensão?","Amazônia","Cerrado","Caatinga","Mata Atlântica"],["Qual é o maior oceano do planeta?","Pacífico","Atlântico","Índico","Ártico"],["Qual bioma brasileiro é típico do sertão nordestino?","Caatinga","Pampa","Pantanal","Cerrado"]],
+[["A linha do Equador divide a Terra em hemisférios...","Norte e Sul","Leste e Oeste","Oriental e Ocidental","Polar e Tropical"],["O clima predominante na maior parte do Brasil é o...","tropical","polar","desértico","mediterrâneo"],["A taxa de natalidade mede...","os nascimentos por mil habitantes","as mortes por mil habitantes","os imigrantes por ano","os idosos por região"]],
+[["O fenômeno em que cidades crescem e se unem formando uma área urbana contínua chama-se...","conurbação","gentrificação","periferização","favelização"],["Qual fenômeno é caracterizado pelo aquecimento anormal das águas do Pacífico equatorial?","El Niño","La Niña","Monção","Corrente do Golfo"],["Qual organização reúne países produtores de petróleo para coordenar a produção?","OPEP","OTAN","ONU","OMC"]]],
+"Português":[
+[["Qual é o plural de “cidadão”?","cidadãos","cidadões","cidadães","cidadans"],["Em “O sol sorriu para mim”, há qual figura de linguagem?","Personificação","Ironia","Hipérbole","Antítese"],["Qual é a classe gramatical da palavra “rapidamente”?","Advérbio","Adjetivo","Substantivo","Verbo"]],
+[["Qual escola literária tem Machado de Assis como principal nome no Brasil?","Realismo","Romantismo","Parnasianismo","Modernismo"],["Quem escreveu “O Cortiço”?","Aluísio Azevedo","Machado de Assis","José de Alencar","Raul Pompeia"],["“Estou morrendo de fome” é um exemplo de...","hipérbole","eufemismo","metonímia","antítese"]],
+[["Qual escritor romântico escreveu “Iracema”?","José de Alencar","Castro Alves","Gonçalves Dias","Álvares de Azevedo"],["Qual é o erro de concordância em “Haviam muitos alunos na sala”?","Deveria ser “Havia” (haver impessoal)","Não há erro","Deveria ser “Houveram”","“Alunos” deveria estar no singular"],["“Dom Casmurro” é narrado em...","primeira pessoa por Bentinho","terceira pessoa onisciente","primeira pessoa por Capitu","segunda pessoa"]]],
+"Inglês":[
+[["What is the past tense of “go”?","went","goed","gone","going"],["Choose the correct one: “She ___ a student.”","is","are","am","be"],["O que significa “book” em português?","livro","caderno","janela","mesa"]],
+[["Choose the correct one: “I ___ playing football now.”","am","is","are","do"],["What is the plural of “child”?","children","childs","childes","childrens"],["Choose the correct one: “Yesterday, they ___ to the park.”","went","go","goes","going"]],
+[["Which sentence is in the Present Perfect?","She has finished her homework.","She finished her homework.","She is finishing her homework.","She will finish her homework."],["Choose the correct one: “If it rains, we ___ at home.”","will stay","stayed","would stayed","staying"],["“Despite” is closest in meaning to...","in spite of","because of","therefore","as well as"]]],
+"Filosofia":[
+[["Quem foi o mestre de Platão e é considerado um dos pais da filosofia ocidental?","Sócrates","Aristóteles","Descartes","Kant"],["A palavra “filosofia” significa...","amor à sabedoria","medo do desconhecido","estudo dos astros","poder da razão"],["Quem disse “Penso, logo existo”?","Descartes","Platão","Nietzsche","Marx"]],
+[["O “Mito da Caverna” foi escrito por...","Platão","Aristóteles","Sócrates","Hobbes"],["Qual filósofo afirmou que o ser humano é um “animal político”?","Aristóteles","Maquiavel","Rousseau","Locke"],["Qual filósofo escreveu “O Príncipe”?","Maquiavel","Hobbes","Montesquieu","Platão"]],
+[["Para Kant, o imperativo categórico diz que devemos agir...","segundo uma máxima que possa valer como lei universal","buscando o maior prazer","conforme o interesse próprio","de acordo com as tradições"],["Para Hobbes, no estado de natureza o ser humano vive...","em guerra de todos contra todos","em perfeita harmonia","sob leis divinas","em igualdade pacífica"],["Quem formulou a ideia de “contrato social” em obra de 1762?","Rousseau","Descartes","Nietzsche","Platão"]]],
+"Sociologia":[
+[["Qual sociólogo criou o conceito de “fato social”?","Émile Durkheim","Karl Marx","Max Weber","Platão"],["Em sociologia, cultura é...","o conjunto de hábitos, crenças e costumes de um grupo","apenas as artes eruditas","somente a língua falada","apenas as tradições religiosas"],["O processo pelo qual aprendemos normas e valores da sociedade é a...","socialização","alienação","globalização","mercantilização"]],
+[["Para Karl Marx, a sociedade capitalista se divide principalmente em...","burguesia e proletariado","nobreza e clero","patrões e governo","urbanos e rurais"],["O conceito de “ação social” é central na obra de...","Max Weber","Durkheim","Comte","Marx"],["Estratificação social refere-se...","à divisão da sociedade em camadas hierarquizadas","ao crescimento das cidades","à troca de bens","à mistura de culturas"]],
+[["O que é “anomia” para Durkheim?","Ausência ou enfraquecimento de normas sociais","Excesso de leis","Revolução da classe operária","Crença em vários deuses"],["Qual termo Marx usa para a perda de controle do trabalhador sobre o que produz?","Alienação","Anomia","Burocracia","Ética protestante"],["Quem escreveu “A Ética Protestante e o Espírito do Capitalismo”?","Max Weber","Karl Marx","Émile Durkheim","Auguste Comte"]]]
+};
+
+// ---------- utilidades de desenho ----------
+function rr(x,y,w,h,r,fill,stroke,lw){g.beginPath();g.roundRect(x,y,w,h,r);if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||2;g.stroke()}}
+function circ(x,y,r,fill,stroke,lw){g.beginPath();g.arc(x,y,r,0,7);if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||1;g.stroke()}}
+function box(x,y,w,h,c){g.fillStyle=c;g.fillRect(x,y,w,h)}
+function quebrar(t,font,max){g.font=font;const L=[];let a="";for(const p of t.split(" ")){const s=(a+" "+p).trim();if(g.measureText(s).width<=max)a=s;else{if(a)L.push(a);a=p}}if(a)L.push(a);return L}
+function texto(t,font,cor,r){const L=quebrar(t,font,r.w-12),lh=parseInt(font.match(/(\d+)px/)[1])*1.25;g.font=font;g.fillStyle=cor;g.textAlign="center";g.textBaseline="middle";let y=r.y+r.h/2-lh*(L.length-1)/2;for(const l of L){g.fillText(l,r.x+r.w/2,y);y+=lh}}
+function central(t,font,cor,y){texto(t,font,cor,{x:0,y:y-20,w:W,h:40})}
+function esq(t,font,cor,x,y){g.font=font;g.fillStyle=cor;g.textAlign="left";g.textBaseline="middle";g.fillText(t,x,y)}
+const colide=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+
+// ---------- personagens e cenário ----------
+function aluno(r){const x=r.x,y=r.y;rr(x,y+22,8,18,3,"#e68228");box(x+8,y+42,8,12,"#283c78");box(x+18,y+42,8,12,"#283c78");rr(x+6,y+20,22,24,5,"#3c96dc");circ(x+17,y+11,11,PELE);rr(x+6,y,22,7,4,"#462814");circ(x+13,y+12,2,PRETO);circ(x+21,y+12,2,PRETO)}
+function professor(r){const x=r.x,y=r.y;box(x+8,y+48,9,12,"#32323c");box(x+23,y+48,9,12,"#32323c");rr(x+4,y+22,32,28,5,"#5a3c6e");box(x+16,y+22,8,14,BRANCO);g.fillStyle=VERM;g.beginPath();g.moveTo(x+20,y+24);g.lineTo(x+17,y+34);g.lineTo(x+23,y+34);g.fill();circ(x+20,y+12,11,PELE);rr(x+8,y+1,24,6,3,"#969696");circ(x+15,y+12,5,null,PRETO);circ(x+25,y+12,5,null,PRETO);g.strokeStyle="#c8aa64";g.lineWidth=3;g.beginPath();g.moveTo(x+36,y+32);g.lineTo(x+54,y+10);g.stroke();g.font=PEQ;g.fillStyle=PRETO;g.textAlign="center";g.textBaseline="top";g.fillText("Professor",r.x+r.w/2,r.y+r.h+4)}
+function sala(){box(0,0,W,H,"#e4decd");box(0,TOPO-4,W,H-TOPO+4,"#b08c60");box(0,TOPO-4,W,6,"#785a3c");g.strokeStyle="#96734b";g.lineWidth=1;for(let x=0;x<W;x+=80){g.beginPath();g.moveTo(x,TOPO);g.lineTo(x,H);g.stroke()}
+rr(QUADRO.x-8,QUADRO.y-8,QUADRO.w+16,QUADRO.h+16,8,"#6e4828");rr(QUADRO.x,QUADRO.y,QUADRO.w,QUADRO.h,4,"#20543e");
+for(const m of MESAS){rr(m.x,m.y,m.w,m.h,5,"#8c5f37");rr(m.x,m.y,m.w,m.h,5,null,"#5f3e22",3)}professor(PROF)}
+function escurecer(a){g.fillStyle="rgba(0,0,0,"+a+")";g.fillRect(0,0,W,H)}
+
+// ---------- jogo ----------
+const J={recorde:0,estado:"menu",al:{x:470,y:430,w:34,h:54}};
+const nivel=()=>1+Math.min(2,Math.floor(J.seq/SOBE));
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+function reiniciar(){Object.assign(J,{pontos:0,vidas:VIDAS,seq:0,acertos:0,erros:0,usadas:new Set(),esc:null,fala:"",det:"",fim:0});J.al={x:470,y:430,w:34,h:54};novaPergunta()}
+function sortear(n){const d=[];for(const m in BANCO)BANCO[m][n-1].forEach((p,i)=>{if(!J.usadas.has(m+n+i))d.push([m,p,m+n+i])});
+if(!d.length){for(const k of [...J.usadas])if(k.slice(-2,-1)==n)J.usadas.delete(k);return sortear(n)}const s=rnd(d);J.usadas.add(s[2]);return s}
+function novaPergunta(){const n=nivel(),[m,it]=sortear(n),[t,certa,...er]=it,op=[certa,...er].sort(()=>Math.random()-.5);J.p={m,t,op,ok:op.indexOf(certa),n};J.esc=null;J.fala=m+"!";J.det="";J.estado="pergunta"}
+function opcaoSob(){if(J.al.y>LIMQ)return null;const cx=J.al.x+J.al.w/2;for(let i=0;i<4;i++)if(cx>=OPC[i].x-5&&cx<OPC[i].x+OPC[i].w+5)return i;return null}
+function responder(i){const p=J.p,antes=nivel();J.esc=i;
+if(i===p.ok){const ganho=10*p.n+5*Math.min(J.seq,10);J.pontos+=ganho;J.seq++;J.acertos++;J.recorde=Math.max(J.recorde,J.pontos);J.fala=rnd(ELOGIOS);J.det="Acertou! +"+ganho+" pontos."+(nivel()>antes?" A dificuldade subiu para "+NOMES[nivel()]+"!":"")}
+else{J.vidas--;J.erros++;J.seq=Math.max(0,J.seq-2);J.fala=rnd(BRONCAS);J.det="Resposta certa: "+p.op[p.ok]+"."+(nivel()<antes?" A dificuldade voltou para "+NOMES[nivel()]+".":"")}
+J.estado="feedback";J.fim=performance.now()+2800}
+
+const K=new Set();
+addEventListener("keydown",e=>{if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key))e.preventDefault();K.add(e.key.toLowerCase());if(e.repeat)return;
+if((J.estado==="menu"||J.estado==="gameover")&&e.key==="Enter")reiniciar();
+else if(J.estado==="pergunta"&&(e.key===" "||e.key.toLowerCase()==="e")){const i=opcaoSob();if(i!==null)responder(i)}});
+addEventListener("keyup",e=>K.delete(e.key.toLowerCase()));
+C.addEventListener("click",e=>{C.focus();if(J.estado==="menu"||J.estado==="gameover"){reiniciar();return}
+if(J.estado==="pergunta"){const b=C.getBoundingClientRect(),x=(e.clientX-b.left)*W/b.width,y=(e.clientY-b.top)*H/b.height;const i=OPC.findIndex(r=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h);if(i>=0)responder(i)}});
+document.querySelectorAll("#ctl [data-k]").forEach(b=>{const k=b.dataset.k,on=e=>{e.preventDefault();K.add(k)},off=e=>{e.preventDefault();K.delete(k)};b.addEventListener("pointerdown",on);["pointerup","pointercancel","pointerleave"].forEach(t=>b.addEventListener(t,off))});
+document.getElementById("ok").addEventListener("pointerdown",e=>{e.preventDefault();if(J.estado==="menu"||J.estado==="gameover")reiniciar();else if(J.estado==="pergunta"){const i=opcaoSob();if(i!==null)responder(i)}});
+const kd=(...n)=>n.some(k=>K.has(k));
+
+function mover(){const a=J.al,V=4,dx=(kd("arrowright","d")?1:0)-(kd("arrowleft","a")?1:0),dy=(kd("arrowdown","s")?1:0)-(kd("arrowup","w")?1:0);
+a.x=Math.max(10,Math.min(W-10-a.w,a.x+dx*V));for(const o of OBST)if(colide(a,o)){if(dx>0)a.x=o.x-a.w;else if(dx<0)a.x=o.x+o.w}
+a.y=Math.max(TOPO,Math.min(BASE-a.h,a.y+dy*V));for(const o of OBST)if(colide(a,o)){if(dy>0)a.y=o.y-a.h;else if(dy<0)a.y=o.y+o.h}}
+function atualizar(){if(J.estado==="pergunta"||J.estado==="feedback")mover();
+if(J.estado==="feedback"&&performance.now()>=J.fim){if(J.vidas<=0){J.recorde=Math.max(J.recorde,J.pontos);J.estado="gameover"}else novaPergunta()}}
+
+function quadro(){const p=J.p,sob=J.estado==="pergunta"?opcaoSob():null;
+esq("Matéria: "+p.m+"   |   Dificuldade: "+NOMES[p.n],PEQ,AMARELO,QUADRO.x+20,QUADRO.y+22);texto(p.t,MED,BRANCO,AREA);
+OPC.forEach((r,i)=>{let f="#236446",b=BRANCO,e=2;if(J.estado==="pergunta"&&i===sob){b=AMARELO;e=5}
+if(J.estado==="feedback"){if(i===p.ok)f="#289646";else if(i===J.esc)f="#aa3232"}
+rr(r.x,r.y,r.w,r.h,10,f);rr(r.x,r.y,r.w,r.h,10,null,b,e);texto("ABCD"[i]+") "+p.op[i],PEQ,BRANCO,r)})}
+function balao(){if(!J.fala)return;g.font=PEQ;const w=g.measureText(J.fala).width+24;g.fillStyle=BRANCO;g.beginPath();g.moveTo(105,414);g.lineTo(93,422);g.lineTo(105,424);g.fill();rr(105,400,w,32,10,BRANCO,PRETO,2);esq(J.fala,PEQ,PRETO,117,416)}
+function hud(){box(0,0,W,44,"#1e1e28");[["Pontos: "+J.pontos,15],["Dificuldade: "+NOMES[nivel()],200],["Sequência: "+J.seq,440],["Recorde: "+J.recorde,620]].forEach(([t,x])=>esq(t,MED,BRANCO,x,23));
+for(let i=0;i<J.vidas;i++)circ(W-30-i*26,22,9,VERM,BRANCO,2)}
+function barra(){g.fillStyle="rgba(0,0,0,.67)";g.fillRect(0,H-56,W,56);let t;if(J.estado==="feedback")t=J.det;else{const s=opcaoSob();t=s!==null?"Pressione ESPAÇO ou E para responder com a alternativa "+"ABCD"[s]:"Vá até o quadro e fique na frente da alternativa escolhida. Depois aperte ESPAÇO ou E."}texto(t,PEQ,BRANCO,{x:10,y:H-56,w:W-20,h:56})}
+function menu(){escurecer(.78);central("SALA DE AULA",TIT,AMARELO,100);central("Quiz do 2º Ano do Ensino Médio",GRD,BRANCO,160);
+["Setas ou WASD: mover o aluno","Vá até o quadro e fique na frente da resposta certa","ESPAÇO ou E: responder","Cada "+SOBE+" acertos seguidos, a dificuldade sobe e os pontos aumentam","Cada erro custa uma vida (você tem "+VIDAS+")"].forEach((l,i)=>central(l,MED,BRANCO,235+i*34));
+texto("Matérias: "+Object.keys(BANCO).join(", "),PEQ,"#bebebe",{x:80,y:420,w:W-160,h:50});central("Pressione ENTER (ou toque) para começar",GRD,AMARELO,520)}
+function fim(){escurecer(.78);central("FIM DE JOGO",TIT,VERM,140);central("Pontos: "+J.pontos,GRD,BRANCO,230);central("Acertos: "+J.acertos+"   |   Erros: "+J.erros,MED,BRANCO,280);central("Recorde: "+J.recorde,MED,AMARELO,320);central("Pressione ENTER (ou toque) para jogar de novo",GRD,AMARELO,420)}
+function credito(){g.font=F(13,1);g.textAlign="right";g.textBaseline="alphabetic";g.fillStyle="rgba(0,0,0,.55)";const w=g.measureText("Feito por: Erick M.").width;g.fillRect(W-w-22,H-24,w+22,24);g.fillStyle=BRANCO;g.fillText("Feito por: Erick M.",W-10,H-8)}
+function desenhar(){sala();if(J.estado==="menu"){menu();credito();return}quadro();balao();aluno(J.al);hud();barra();if(J.estado==="gameover")fim();credito()}
+
+reiniciar();J.estado="menu";
+(function loop(){atualizar();desenhar();requestAnimationFrame(loop)})();
+</script>
+</body>
+</html>
